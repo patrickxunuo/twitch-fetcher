@@ -1,0 +1,20 @@
+# Dependency directory
+node_modules/
+
+# Environment secrets
+.env
+
+# Build output or logs
+*.log
+
+# Lock files
+package-lock.json
+yarn.lock
+
+# IDE and system files
+.idea/
+.vscode/
+.DS_Store
+
+# Downloaded clips directory
+twitch_clips_*/
