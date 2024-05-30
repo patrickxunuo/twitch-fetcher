@@ -24,4 +24,28 @@ async function writeBroadcastersToFile(usernames) {
 }
 
 // Example usage with Tyler1 and Midbeast
-writeBroadcastersToFile(["loltyler1", "midbeast"]).catch(console.error);
+writeBroadcastersToFile([
+  "loltyler1",
+  "midbeast",
+  "spear_shot",
+  "thebausffs",
+  "pobelter",
+  "sanchovies",
+  "lourlo",
+  "ipav999",
+  "xfsn_saber",
+  "trick2g",
+  "rush",
+  "pekinwoof",
+  "tfblade",
+  "sloppywalrusx",
+  "jankos",
+  "dantes",
+  "ratirl",
+  "caedrel",
+  "lol_nemesis",
+  "llstylish",
+  "drututt",
+  "broxah",
+  "autolykuslol",
+]).catch(console.error);

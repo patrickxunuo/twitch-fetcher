@@ -18,3 +18,7 @@ yarn.lock
 
 # Downloaded clips directory
 twitch_clips_*/
+
+draft_content.json
+
+all_clips_random
