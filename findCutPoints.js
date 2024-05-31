@@ -3,7 +3,7 @@ const path = require("path");
 const { DRAFT_CONTENT_PATH } = require("./config");
 
 // Path to the JSON file
-const filePath = path.join(__dirname, DRAFT_CONTENT_PATH);
+const filePath = path.resolve(__dirname, DRAFT_CONTENT_PATH);
 
 // Function to read the JSON file and parse it
 function readAndParseJSON(file) {

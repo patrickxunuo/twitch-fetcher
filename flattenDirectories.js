@@ -10,9 +10,9 @@ const rename = util.promisify(fs.rename);
 
 // Define the source and target directory
 const today = new Date().toISOString().slice(0, 10);
-const sourceDir = path.join(
+const sourceDir = path.resolve(
   __dirname,
-  `${BASE_DOWNLOAD_PATH}_${new Date().toISOString().slice(0, 10)}`,
+  `${BASE_DOWNLOAD_PATH}_${today}`,
 );
 const targetDir = path.join(__dirname, `flattened_clips_${today}`);
 
