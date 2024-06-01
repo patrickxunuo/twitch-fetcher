@@ -21,13 +21,14 @@ async function fetchClips(broadcasterId, token) {
   const params = {
     broadcaster_id: broadcasterId,
     started_at: yesterday,
-    first: 5,
+    first: 10, // Fetch 10 clips
     sort: "NEWEST",
   };
   const response = await axios.get(url, { headers, params });
   return response.data.data;
 }
 
+// Download a clip and save it to a specific folder
 // Download a clip and save it to a specific folder
 async function downloadClip(url, folderPath, filename) {
   const response = await axios({
@@ -55,20 +56,20 @@ async function main() {
   }
 
   for (const broadcaster of broadcasters) {
-    const streamerFolderPath = path.join(dateFolder, broadcaster.username);
-    if (!fs.existsSync(streamerFolderPath)) {
-      fs.mkdirSync(streamerFolderPath, { recursive: true });
-    }
-
     const clips = await fetchClips(broadcaster.id, token);
-    for (const clip of clips) {
+    // Sort clips by view_count and pick the top 5
+    const topClips = clips
+      .sort((a, b) => b.view_count - a.view_count)
+      .slice(0, 5);
+
+    for (const clip of topClips) {
       const clipUrl = clip.thumbnail_url.replace(
         "-preview-480x272.jpg",
         ".mp4",
       );
-      const clipName = clip.id + ".mp4";
-      await downloadClip(clipUrl, streamerFolderPath, clipName);
-      console.log(`Downloaded ${clipName} to ${streamerFolderPath}`);
+      const clipName = `${broadcaster.username}###${clip.id}.mp4`; // Using ### as a separator
+      await downloadClip(clipUrl, dateFolder, clipName);
+      console.log(`Downloaded ${clipName} to ${dateFolder}`);
     }
   }
 }
