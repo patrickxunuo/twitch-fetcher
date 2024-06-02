@@ -57,17 +57,12 @@ async function main() {
 
   for (const broadcaster of broadcasters) {
     const clips = await fetchClips(broadcaster.id, token);
-    // Sort clips by view_count and pick the top 5
-    const topClips = clips
-      .sort((a, b) => b.view_count - a.view_count)
-      .slice(0, 5);
-
-    for (const clip of topClips) {
+    for (const clip of clips) {
       const clipUrl = clip.thumbnail_url.replace(
         "-preview-480x272.jpg",
         ".mp4",
       );
-      const clipName = `${broadcaster.username}###${clip.id}.mp4`; // Using ### as a separator
+      const clipName = `${clip.id}###${broadcaster.username}.mp4`; // Using ### as a separator
       await downloadClip(clipUrl, dateFolder, clipName);
       console.log(`Downloaded ${clipName} to ${dateFolder}`);
     }

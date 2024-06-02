@@ -29,7 +29,11 @@ function generateDescriptions(data) {
 
     const video = videos.find((video) => video.id === materialId);
     if (video && video.material_name) {
-      const folderName = video.material_name.split("###")?.[0]; // Retrieve original folder name
+      const folderName = video.material_name
+        .split("###")?.[1]
+        ?.replace(".mp4", ""); // Retrieve original folder name
+      if (cutPoints?.length > 0 && cutPoints.at(-1)?.includes(folderName))
+        continue;
       cutPoints.push(`${startTime} ${folderName}`);
     } else {
       cutPoints.push(startTime);
@@ -41,18 +45,18 @@ function generateDescriptions(data) {
 
 // Function to write cut points to the description file
 function updateDescriptionFile(cutPoints) {
-  let content = fs.readFileSync(descriptionPath, { encoding: 'utf8' });
-  const startMarker = content.indexOf('\n0:');
-  const endMarker = content.indexOf('\nOutro');
+  let content = fs.readFileSync(descriptionPath, { encoding: "utf8" });
+  const startMarker = content.indexOf("\n0:");
+  const endMarker = content.indexOf("\nOutro");
 
   if (startMarker !== -1 && endMarker !== -1) {
     const before = content.substring(0, startMarker);
     const after = content.substring(endMarker);
-    const newContent = `${before}\n${cutPoints.join('\n')}${after}`;
-    fs.writeFileSync(descriptionPath, newContent, { encoding: 'utf8' });
-    console.log('Description updated successfully.');
+    const newContent = `${before}\n${cutPoints.join("\n")}${after}`;
+    fs.writeFileSync(descriptionPath, newContent, { encoding: "utf8" });
+    console.log("Description updated successfully.");
   } else {
-    console.error('Markers not found in the description file.');
+    console.error("Markers not found in the description file.");
   }
 }
 
