@@ -19,5 +19,6 @@ yarn.lock
 # Downloaded clips directory
 twitch_clips_*/
 
-draft_content.json
+credentials.json
+token.json
 description.txt

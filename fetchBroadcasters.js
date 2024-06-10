@@ -63,4 +63,6 @@ writeBroadcastersToFile([
   "bobqinxd",
   "kev1ntv",
   "xdavemon",
+  "azzapp",
+  "forsen",
 ]).catch(console.error);

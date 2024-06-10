@@ -21,7 +21,7 @@ async function fetchClips(broadcasterId, token) {
   const params = {
     broadcaster_id: broadcasterId,
     started_at: yesterday,
-    first: 10, // Fetch 10 clips
+    first: 5, // Fetch 10 clips
     sort: "NEWEST",
   };
   const response = await axios.get(url, { headers, params });

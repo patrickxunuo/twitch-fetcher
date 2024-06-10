@@ -25,13 +25,17 @@ function generateDescriptions(data) {
     const start = segment.target_timerange.start / 1000000; // Convert to seconds
     const startSec = Math.floor(start); // round down to the nearest second
     const startMin = Math.floor(startSec / 60);
-    const startTime = `${startMin}:${(startSec % 60).toString().padStart(2, "0")}`;
+    const startTime =
+      i === 1
+        ? "00:00"
+        : `${startMin}:${(startSec % 60).toString().padStart(2, "0")}`;
 
     const video = videos.find((video) => video.id === materialId);
     if (video && video.material_name) {
-      const folderName = video.material_name
-        .split("###")?.[1]
-        ?.replace(".mp4", ""); // Retrieve original folder name
+      const folderName =
+        i === segments.length - 1
+          ? "outro"
+          : video.material_name.split("###")?.[1]?.replace(".mp4", ""); // Retrieve original folder name
       if (cutPoints?.length > 0 && cutPoints.at(-1)?.includes(folderName))
         continue;
       cutPoints.push(`${startTime} ${folderName}`);
