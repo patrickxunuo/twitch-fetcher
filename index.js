@@ -4,13 +4,13 @@ const axios = require("axios");
 const { getOAuthToken } = require("./twitchApi");
 const { BROADCASTERS_FILE_PATH, BASE_DOWNLOAD_PATH } = require("./config");
 
-// Read broadcaster IDs from the file
+const ONLY_DOWNLOAD_MOST_VIEW = true;
+
 function readBroadcasterIds() {
   const data = fs.readFileSync(BROADCASTERS_FILE_PATH);
   return JSON.parse(data);
 }
 
-// Fetch clips for a given broadcaster
 async function fetchClips(broadcasterId, token) {
   const url = "https://api.twitch.tv/helix/clips";
   const headers = {
@@ -21,15 +21,13 @@ async function fetchClips(broadcasterId, token) {
   const params = {
     broadcaster_id: broadcasterId,
     started_at: yesterday,
-    first: 5, // Fetch 10 clips
+    first: 5,
     sort: "NEWEST",
   };
   const response = await axios.get(url, { headers, params });
   return response.data.data;
 }
 
-// Download a clip and save it to a specific folder
-// Download a clip and save it to a specific folder
 async function downloadClip(url, folderPath, filename) {
   const response = await axios({
     url,
@@ -45,7 +43,6 @@ async function downloadClip(url, folderPath, filename) {
   });
 }
 
-// Main function to execute the script
 async function main() {
   const token = await getOAuthToken();
   const broadcasters = readBroadcasterIds();
@@ -55,14 +52,32 @@ async function main() {
     fs.mkdirSync(dateFolder, { recursive: true });
   }
 
+  let allClips = [];
   for (const broadcaster of broadcasters) {
     const clips = await fetchClips(broadcaster.id, token);
-    for (const clip of clips) {
+    allClips = [...allClips, ...clips];
+  }
+
+  if (ONLY_DOWNLOAD_MOST_VIEW) {
+    allClips.sort((a, b) => b.view_count - a.view_count);
+    const topClips = allClips.slice(0, 5);
+
+    for (const clip of topClips) {
       const clipUrl = clip.thumbnail_url.replace(
         "-preview-480x272.jpg",
         ".mp4",
       );
-      const clipName = `${clip.id}###${broadcaster.username}.mp4`; // Using ### as a separator
+      const clipName = `most_view_${clip.id}###${clip.broadcaster_name}.mp4`;
+      await downloadClip(clipUrl, dateFolder, clipName);
+      console.log(`Downloaded ${clipName} to ${dateFolder}`);
+    }
+  } else {
+    for (const clip of allClips) {
+      const clipUrl = clip.thumbnail_url.replace(
+        "-preview-480x272.jpg",
+        ".mp4",
+      );
+      const clipName = `${clip.id}###${clip.broadcaster_name}.mp4`;
       await downloadClip(clipUrl, dateFolder, clipName);
       console.log(`Downloaded ${clipName} to ${dateFolder}`);
     }
