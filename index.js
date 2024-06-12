@@ -4,7 +4,7 @@ const axios = require("axios");
 const { getOAuthToken } = require("./twitchApi");
 const { BROADCASTERS_FILE_PATH, BASE_DOWNLOAD_PATH } = require("./config");
 
-const ONLY_DOWNLOAD_MOST_VIEW = true;
+const ONLY_DOWNLOAD_MOST_VIEW = false;
 
 function readBroadcasterIds() {
   const data = fs.readFileSync(BROADCASTERS_FILE_PATH);
