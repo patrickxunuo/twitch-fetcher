@@ -17,6 +17,7 @@ function generateDescriptions(data) {
   const videos = data.materials.videos;
   const segments = data.tracks?.[0]?.segments;
   const cutPoints = [];
+  const streamers = new Set();
 
   // Loop through the segments array, starting from the second segment
   for (let i = 1; i < segments.length; i++) {
@@ -35,20 +36,24 @@ function generateDescriptions(data) {
       const folderName =
         i === segments.length - 1
           ? "outro"
-          : video.material_name.split("###")?.[1]?.replace(".mp4", ""); // Retrieve original folder name
+          : video.material_name
+              .split("###")?.[1]
+              ?.replace(".mp4", "")
+              ?.toLowerCase(); // Retrieve original folder name
       if (cutPoints?.length > 0 && cutPoints.at(-1)?.includes(folderName))
         continue;
       cutPoints.push(`${startTime} ${folderName}`);
+      streamers.add("https://twitch.tv/" + folderName);
     } else {
       cutPoints.push(startTime);
     }
   }
 
-  return cutPoints;
+  return { streamers, cutPoints };
 }
 
 // Function to write cut points to the description file
-function updateDescriptionFile(cutPoints) {
+function updateDescriptionFile({ streamers, cutPoints }) {
   let content = fs.readFileSync(descriptionPath, { encoding: "utf8" });
   const startMarker = content.indexOf("\n0:");
   const endMarker = content.indexOf("\nOutro");
@@ -56,20 +61,33 @@ function updateDescriptionFile(cutPoints) {
   if (startMarker !== -1 && endMarker !== -1) {
     const before = content.substring(0, startMarker);
     const after = content.substring(endMarker);
-    const newContent = `${before}\n${cutPoints.join("\n")}${after}`;
-    fs.writeFileSync(descriptionPath, newContent, { encoding: "utf8" });
-    console.log("Description updated successfully.");
+    content = `${before}\n${cutPoints.join("\n")}\n${after}`;
+    console.log("Cut points updated successfully to description.");
   } else {
-    console.error("Markers not found in the description file.");
+    console.error("Cut points markers not found in the description file.");
   }
+
+  const startMarker2 = content.indexOf("\nhttps");
+  const endMarker2 = content.indexOf("\nTimeline");
+
+  if (startMarker2 !== -1 && endMarker2 !== -1) {
+    let before = content.substring(0, startMarker2);
+    let after = content.substring(endMarker2);
+    content = `${before}\n${Array.from(streamers).join("\n")}\n${after}`;
+    console.log("Streamer credits updated successfully to description.");
+  } else {
+    console.error("Streamer credits markers not found in the description file.");
+  }
+
+  fs.writeFileSync(descriptionPath, content, { encoding: "utf8" });
 }
 
 // Main function to run the script
 async function main() {
   try {
     const jsonData = readAndParseJSON(filePath);
-    const cutPoints = generateDescriptions(jsonData);
-    updateDescriptionFile(cutPoints);
+    const d = generateDescriptions(jsonData);
+    updateDescriptionFile(d);
   } catch (error) {
     console.error("Error processing the file:", error);
   }
