@@ -28,7 +28,7 @@ function generateDescriptions(data) {
     const startMin = Math.floor(startSec / 60);
     const startTime =
       i === 1
-        ? "00:00"
+        ? "0:00"
         : `${startMin}:${(startSec % 60).toString().padStart(2, "0")}`;
 
     const video = videos.find((video) => video.id === materialId);
@@ -43,7 +43,9 @@ function generateDescriptions(data) {
       if (cutPoints?.length > 0 && cutPoints.at(-1)?.includes(folderName))
         continue;
       cutPoints.push(`${startTime} ${folderName}`);
-      streamers.add("https://twitch.tv/" + folderName);
+      if (folderName !== 'outro') {
+        streamers.add("https://twitch.tv/" + folderName);
+      }
     } else {
       cutPoints.push(startTime);
     }
@@ -55,7 +57,7 @@ function generateDescriptions(data) {
 // Function to write cut points to the description file
 function updateDescriptionFile({ streamers, cutPoints }) {
   let content = fs.readFileSync(descriptionPath, { encoding: "utf8" });
-  const startMarker = content.indexOf("\n0:");
+  const startMarker = content.indexOf("0:");
   const endMarker = content.indexOf("\nOutro");
 
   if (startMarker !== -1 && endMarker !== -1) {

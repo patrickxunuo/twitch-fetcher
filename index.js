@@ -29,19 +29,31 @@ async function fetchClips(broadcasterId, token) {
 }
 
 async function downloadClip(url, folderPath, filename) {
+  const fullFilePath = path.join(folderPath, filename);
+  
+  // Check if the file already exists
+  if (fs.existsSync(fullFilePath)) {
+    console.log(`File ${filename} already exists in ${folderPath}. Skipping download.`);
+    return Promise.resolve(); // Resolve the promise without doing anything
+  }
+
+  // Proceed with downloading if the file does not exist
   const response = await axios({
     url,
     method: "GET",
     responseType: "stream",
   });
-  const fullFilePath = path.join(folderPath, filename);
   const writer = fs.createWriteStream(fullFilePath);
   response.data.pipe(writer);
   return new Promise((resolve, reject) => {
-    writer.on("finish", resolve);
+    writer.on("finish", () => {
+      console.log(`Downloaded ${filename} to ${folderPath}`);
+      resolve();
+    });
     writer.on("error", reject);
   });
 }
+
 
 async function main() {
   const token = await getOAuthToken();
