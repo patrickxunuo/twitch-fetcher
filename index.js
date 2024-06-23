@@ -22,7 +22,6 @@ async function fetchClips(broadcasterId, token) {
     broadcaster_id: broadcasterId,
     started_at: yesterday,
     first: 5,
-    sort: "NEWEST",
   };
   const response = await axios.get(url, { headers, params });
   return response.data.data;

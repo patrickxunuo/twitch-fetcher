@@ -78,4 +78,5 @@ writeBroadcastersToFile([
   "brube",
   "makkro0",
   "AlphaTwinsLoL",
+  "tempest",
 ]).catch(console.error);
