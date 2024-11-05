@@ -15,7 +15,7 @@ const CONFIG = {
     "Projects",
     "com.lveditor.draft",
     `lol ${formatDate()}`,
-    "draft_content.json",
+    "draft_agency_config.json",
   ),
   DESCRIPTION_PATH: path.resolve(__dirname, "description.txt"),
   CREDENTIALS_PATH: path.resolve(__dirname, "credentials.json"),
