@@ -4,10 +4,13 @@ const axios = require("axios");
 const { getOAuthToken } = require("./twitchApi");
 const { BROADCASTERS_FILE_PATH, BASE_DOWNLOAD_PATH } = require("./config");
 const { spawn } = require("child_process");
+const { calculateViewIndex } = require("./helper");
 
-const ONLY_DOWNLOAD_MOST_VIEW = true;
+const ONLY_DOWNLOAD_MOST_VIEW = false;
+const DOWNLOAD_MOST_VIEW_COUNT = 300;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
+const CLIP_PER_STREAMER = 8;
 
 function readBroadcasterIds() {
   const data = fs.readFileSync(BROADCASTERS_FILE_PATH);
@@ -29,7 +32,7 @@ async function fetchClips(broadcasterId, token, retryCount = 0) {
     broadcaster_id: broadcasterId,
     started_at: startDate.toISOString(),
     ended_at: endDate.toISOString(),
-    first: 100, // Maximum allowed per page
+    first: 100, // Request more clips since we'll filter and sort
   };
 
   try {
@@ -39,7 +42,6 @@ async function fetchClips(broadcasterId, token, retryCount = 0) {
     // Handle pagination if there are more clips
     let cursor = response.data.pagination?.cursor;
     while (cursor && clips.length < 100) {
-      // Limit total clips to 100 to avoid rate limits
       const nextResponse = await axios.get(url, {
         headers,
         params: { ...params, after: cursor },
@@ -48,18 +50,98 @@ async function fetchClips(broadcasterId, token, retryCount = 0) {
       cursor = nextResponse.data.pagination?.cursor;
     }
 
-    return clips;
+    // Filter clips based on both clip creation date and VOD creation date
+    const filteredClips = clips.filter((clip) => {
+      const clipDate = new Date(clip.created_at);
+      return (
+        clipDate >= startDate &&
+        clipDate <= endDate &&
+        clip.video_id &&
+        clip.video_id !== ""
+      );
+    });
+
+    // Get VOD details and calculate view index for remaining clips
+    const clipsWithScores = await Promise.all(
+      filteredClips.map(async (clip) => {
+        try {
+          const vodResponse = await axios.get(
+            `https://api.twitch.tv/helix/videos?id=${clip.video_id}`,
+            { headers },
+          );
+
+          const vodData = vodResponse.data.data[0];
+          if (!vodData) return null;
+
+          const vodCreatedAt = new Date(vodData.created_at);
+          if (!(vodCreatedAt >= startDate && vodCreatedAt <= endDate)) {
+            return null;
+          }
+
+          // Calculate time factors
+          const clipAge =
+            (endDate - new Date(clip.created_at)) / (1000 * 60 * 60); // Hours since clip creation
+          const vodAge = (endDate - vodCreatedAt) / (1000 * 60 * 60); // Hours since VOD creation
+
+          // Calculate view velocity (views per hour)
+          const viewVelocity = clip.view_count / clipAge;
+
+          // Calculate engagement ratio (if available in vodData)
+          const vodViews = vodData.view_count || 0;
+          const engagementRatio = vodViews > 0 ? clip.view_count / vodViews : 0;
+
+          // Calculate view index
+          // Formula components:
+          // 1. Base views: Raw view count
+          // 2. Time decay: Newer clips get a boost
+          // 3. View velocity: Rewards clips gaining views quickly
+          // 4. VOD engagement: Rewards clips that capture a high proportion of VOD views
+          const viewIndex = calculateViewIndex({
+            viewCount: clip.view_count,
+            clipAge,
+            vodAge,
+            viewVelocity,
+            engagementRatio,
+          });
+
+          return {
+            ...clip,
+            vodData,
+            viewIndex,
+            debugStats: {
+              // Include debug stats to help tune the formula
+              clipAge,
+              vodAge,
+              viewVelocity,
+              engagementRatio,
+            },
+          };
+        } catch (error) {
+          console.error(
+            `Failed to fetch VOD data for clip ${clip.id}:`,
+            error.message,
+          );
+          return null;
+        }
+      }),
+    );
+
+    // Filter out null results and sort by view index
+    const validClips = clipsWithScores
+      .filter((clip) => clip !== null)
+      .sort((a, b) => b.viewIndex - a.viewIndex)
+      .slice(0, CLIP_PER_STREAMER);
+
+    return validClips;
   } catch (error) {
     if (error.response) {
       console.error(
         `API Error: ${error.response.status} - ${error.response.data.message || error.response.statusText}`,
       );
 
-      // Handle specific API errors
       if (error.response.status === 401) {
         throw new Error("Authentication failed. Token may be expired.");
       } else if (error.response.status === 429) {
-        // Rate limit hit - wait and retry
         if (retryCount < MAX_RETRIES) {
           const retryAfter =
             error.response.headers["retry-after"] || RETRY_DELAY;
@@ -93,63 +175,42 @@ async function downloadClip(clip, folderPath, retryCount = 0) {
   const fullFilePath = path.join(folderPath, filename);
 
   if (fs.existsSync(fullFilePath)) {
-    const stats = fs.statSync(fullFilePath);
-    if (stats.size > 0) {
-      console.log(
-        `File ${filename} already exists in ${folderPath}. Skipping download.`,
-      );
-      return;
-    }
-    fs.unlinkSync(fullFilePath);
+    console.log(`File ${filename} already exists. Skipping download.`);
+    return;
   }
 
   try {
     const clipUrl = `https://clips.twitch.tv/${clip.id}`;
+    let inputInterval;
 
     return new Promise((resolve, reject) => {
       const twitchDl = spawn(
         "twitch-dl",
         ["download", clipUrl, "-o", fullFilePath],
         {
-          stdio: ["pipe", "inherit", "inherit"], // Allow us to write to stdin while keeping stdout/stderr visible
+          stdio: ["pipe", "inherit", "inherit"],
         },
       );
 
-      // Automatically respond with "1" whenever there's a prompt
-      twitchDl.stdin.write("1\n");
-
-      // Keep responding with "1" periodically in case of multiple prompts
-      const inputInterval = setInterval(() => {
-        twitchDl.stdin.write("1\n");
-      }, 1000); // Send "1" every second
+      inputInterval = setInterval(() => {
+        try {
+          twitchDl.stdin.write("1\n");
+        } catch (error) {
+          // Ignore EPIPE errors
+        }
+      }, 1000);
 
       twitchDl.on("close", (code) => {
-        clearInterval(inputInterval); // Clean up the interval
-
+        clearInterval(inputInterval);
         if (code === 0) {
-          if (fs.existsSync(fullFilePath)) {
-            const stats = fs.statSync(fullFilePath);
-            if (stats.size > 0) {
-              console.log(
-                `Successfully downloaded ${filename} to ${folderPath}`,
-              );
-              resolve();
-            } else {
-              fs.unlinkSync(fullFilePath);
-              reject(new Error("Downloaded file is empty"));
-            }
-          } else {
-            reject(new Error("File not found after download"));
-          }
+          console.log(`Successfully downloaded ${filename}`);
+          resolve();
         } else {
           reject(new Error(`twitch-dl exited with code ${code}`));
         }
       });
 
-      twitchDl.on("error", (err) => {
-        clearInterval(inputInterval); // Clean up the interval
-        reject(new Error(`Failed to start twitch-dl: ${err.message}`));
-      });
+      twitchDl.stdin.write("1\n");
     });
   } catch (error) {
     if (retryCount < MAX_RETRIES) {
@@ -159,9 +220,7 @@ async function downloadClip(clip, folderPath, retryCount = 0) {
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
       return downloadClip(clip, folderPath, retryCount + 1);
     }
-    throw new Error(
-      `Failed to download ${clip.id} after ${MAX_RETRIES} attempts: ${error.message}`,
-    );
+    throw error;
   }
 }
 
@@ -187,8 +246,10 @@ async function main() {
 
     if (ONLY_DOWNLOAD_MOST_VIEW) {
       allClips.sort((a, b) => b.view_count - a.view_count);
-      allClips = allClips.slice(0, 50);
-      console.log("Downloading top 50 most viewed clips");
+      allClips = allClips.slice(0, DOWNLOAD_MOST_VIEW_COUNT);
+      console.log(
+        `Downloading top ${DOWNLOAD_MOST_VIEW_COUNT} most viewed clips`,
+      );
     }
 
     let successCount = 0;

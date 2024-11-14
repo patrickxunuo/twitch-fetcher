@@ -5,4 +5,38 @@ function formatDate() {
   return month + day;
 }
 
-module.exports = { formatDate };
+function calculateViewIndex({
+  viewCount,
+  clipAge,
+  vodAge,
+  viewVelocity,
+  engagementRatio,
+}) {
+  // Constants for tuning the formula
+  const TIME_DECAY_FACTOR = 0.95; // How quickly the score decays with time
+  const VELOCITY_WEIGHT = 0.3; // Weight of view velocity in the final score
+  const ENGAGEMENT_WEIGHT = 0.2; // Weight of VOD engagement ratio
+
+  // Calculate time decay multiplier (1.0 to TIME_DECAY_FACTOR)
+  // Newer clips get closer to 1.0, older clips closer to TIME_DECAY_FACTOR
+  const timeDecay =
+    TIME_DECAY_FACTOR + (1 - TIME_DECAY_FACTOR) * Math.exp(-clipAge / 24);
+
+  // Normalize view velocity (using log scale to handle extreme values)
+  const normalizedVelocity = Math.log10(viewVelocity + 1) / Math.log10(1000);
+
+  // Calculate base score from views (log scale to handle viral clips more fairly)
+  const baseScore = Math.log10(viewCount + 1);
+
+  // Combine all factors
+  const viewIndex =
+    baseScore *
+    timeDecay *
+    (1 +
+      VELOCITY_WEIGHT * normalizedVelocity +
+      ENGAGEMENT_WEIGHT * engagementRatio);
+
+  return viewIndex;
+}
+
+module.exports = { formatDate, calculateViewIndex };
