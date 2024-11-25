@@ -8,9 +8,10 @@ const { calculateViewIndex } = require("./helper");
 
 const ONLY_DOWNLOAD_MOST_VIEW = false;
 const DOWNLOAD_MOST_VIEW_COUNT = 300;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 2;
 const RETRY_DELAY = 1000;
-const CLIP_PER_STREAMER = 8;
+const CLIP_PER_STREAMER = 20;
+const LEAGUE_OF_LEGENDS_GAME_ID = "21779";
 
 function readBroadcasterIds() {
   const data = fs.readFileSync(BROADCASTERS_FILE_PATH);
@@ -26,7 +27,7 @@ async function fetchClips(broadcasterId, token, retryCount = 0) {
 
   // Calculate time range (last 24 hours)
   const endDate = new Date();
-  const startDate = new Date(endDate - 24 * 3600 * 1000);
+  const startDate = new Date(endDate - 22 * 3600 * 1000);
 
   const params = {
     broadcaster_id: broadcasterId,
@@ -50,70 +51,36 @@ async function fetchClips(broadcasterId, token, retryCount = 0) {
       cursor = nextResponse.data.pagination?.cursor;
     }
 
-    // Filter clips based on both clip creation date and VOD creation date
-    const filteredClips = clips.filter((clip) => {
-      const clipDate = new Date(clip.created_at);
-      return (
-        clipDate >= startDate &&
-        clipDate <= endDate &&
-        clip.video_id &&
-        clip.video_id !== ""
-      );
-    });
+    // Filter clips based on game_id
+    const filteredClips = clips.filter(
+      (clip) => clip.game_id === LEAGUE_OF_LEGENDS_GAME_ID,
+    );
 
     // Get VOD details and calculate view index for remaining clips
     const clipsWithScores = await Promise.all(
       filteredClips.map(async (clip) => {
         try {
-          const vodResponse = await axios.get(
-            `https://api.twitch.tv/helix/videos?id=${clip.video_id}`,
-            { headers },
-          );
-
-          const vodData = vodResponse.data.data[0];
-          if (!vodData) return null;
-
-          const vodCreatedAt = new Date(vodData.created_at);
-          if (!(vodCreatedAt >= startDate && vodCreatedAt <= endDate)) {
-            return null;
-          }
-
           // Calculate time factors
           const clipAge =
             (endDate - new Date(clip.created_at)) / (1000 * 60 * 60); // Hours since clip creation
-          const vodAge = (endDate - vodCreatedAt) / (1000 * 60 * 60); // Hours since VOD creation
 
           // Calculate view velocity (views per hour)
           const viewVelocity = clip.view_count / clipAge;
 
-          // Calculate engagement ratio (if available in vodData)
-          const vodViews = vodData.view_count || 0;
-          const engagementRatio = vodViews > 0 ? clip.view_count / vodViews : 0;
-
           // Calculate view index
-          // Formula components:
-          // 1. Base views: Raw view count
-          // 2. Time decay: Newer clips get a boost
-          // 3. View velocity: Rewards clips gaining views quickly
-          // 4. VOD engagement: Rewards clips that capture a high proportion of VOD views
           const viewIndex = calculateViewIndex({
             viewCount: clip.view_count,
             clipAge,
-            vodAge,
             viewVelocity,
-            engagementRatio,
           });
 
           return {
             ...clip,
-            vodData,
             viewIndex,
             debugStats: {
               // Include debug stats to help tune the formula
               clipAge,
-              vodAge,
               viewVelocity,
-              engagementRatio,
             },
           };
         } catch (error) {
@@ -127,12 +94,10 @@ async function fetchClips(broadcasterId, token, retryCount = 0) {
     );
 
     // Filter out null results and sort by view index
-    const validClips = clipsWithScores
+    return clipsWithScores
       .filter((clip) => clip !== null)
       .sort((a, b) => b.viewIndex - a.viewIndex)
       .slice(0, CLIP_PER_STREAMER);
-
-    return validClips;
   } catch (error) {
     if (error.response) {
       console.error(
@@ -171,13 +136,20 @@ async function fetchClips(broadcasterId, token, retryCount = 0) {
 }
 
 async function downloadClip(clip, folderPath, retryCount = 0) {
-  const filename = `${clip.id}###${clip.broadcaster_name}###${clip.view_count}views###${clip.created_at.split("T")[0]}.mp4`;
-  const fullFilePath = path.join(folderPath, filename);
+  const fullFolderContents = fs.readdirSync(folderPath);
+  const existingClipFile = fullFolderContents.find((file) =>
+    file.startsWith(`${clip.id}###`),
+  );
 
-  if (fs.existsSync(fullFilePath)) {
-    console.log(`File ${filename} already exists. Skipping download.`);
+  if (existingClipFile) {
+    console.log(
+      `Clip ${clip.id} already exists as ${existingClipFile}. Skipping download.`,
+    );
     return;
   }
+
+  const filename = `${clip.id}###${clip.broadcaster_name}###${clip.view_count}views###${clip.created_at.split("T")[0]}.mp4`;
+  const fullFilePath = path.join(folderPath, filename);
 
   try {
     const clipUrl = `https://clips.twitch.tv/${clip.id}`;
@@ -289,6 +261,7 @@ async function main() {
       // Optional: Add a small delay between batches
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
+    const LEAGUE_OF_LEGENDS_GAME_ID = "21779";
 
     console.log("\nDownload Summary:");
     console.log(`Successfully downloaded: ${successCount} clips`);
