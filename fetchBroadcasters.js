@@ -77,4 +77,13 @@ writeBroadcastersToFile([
   "zacsterglobster",
   "cowsep",
   "jensen",
+  "foggedftw2",
+  "ikeepittaco",
+  "kaypea",
+  "ratirl",
+  "king_nidhogg",
+  "humzh",
+  "brokenblade",
+  "corejj",
+  "sirhcez",
 ]).catch(console.error);
